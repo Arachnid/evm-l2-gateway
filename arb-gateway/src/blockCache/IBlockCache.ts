@@ -1,3 +1,5 @@
+import type { Block, Hex } from 'viem';
+
 /**
  * Interface for a block cache.
  */
@@ -9,8 +11,8 @@ export interface IBlockCache {
    */
   getBlock(nodeIndex: bigint): Promise<{
     nodeIndex: bigint;
-    block: Record<string, string>;
-    sendRoot: string;
+    block: Block;
+    sendRoot: Hex;
   } | null>;
 
   /**
@@ -20,9 +22,9 @@ export interface IBlockCache {
    * @param sendRoot The send root associated with the block.
    * @returns A promise that resolves when the block is successfully set in the cache.
    */
-  setBlock(
-    nodeIndex: bigint,
-    block: Record<string, string>,
-    sendRoot: string
-  ): Promise<void>;
+  setBlock(params: {
+    nodeIndex: bigint;
+    block: Block;
+    sendRoot: Hex;
+  }): Promise<void>;
 }

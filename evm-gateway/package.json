@@ -8,6 +8,7 @@
     "@chainlink/ccip-read-server": "^0.2.1",
     "@cloudflare/workers-types": "^4.20240423.0",
     "@ensdomains/ccip-read-cf-worker": "^0.0.1",
+    "abitype": "^1.0.6",
     "ethers": "^6.7.1"
   },
   "exports": {

@@ -56,16 +56,18 @@
     }
   },
   "dependencies": {
-    "@chainlink/ccip-read-server": "^0.2.1",
     "@cloudflare/workers-types": "^4.20240423.0",
+    "@ensdomains/ccip-read-router": "^0.0.5",
     "@ensdomains/evm-gateway": "0.1.0-beta.4",
     "@ensdomains/server-analytics": "0.0.1-alpha.5",
-    "@ethereumjs/block": "^5.0.0",
-    "@nomicfoundation/ethereumjs-block": "^5.0.2",
+    "@whatwg-node/server": "^0.9.47",
     "commander": "^11.0.0",
-    "ethers": "^6.7.1"
+    "itty-router": "^5.0.18",
+    "viem": "^2.19.8"
   },
   "devDependencies": {
-    "@commander-js/extra-typings": "^11.0.0"
+    "@types/node": "^22.4.1",
+    "@commander-js/extra-typings": "^11.0.0",
+    "wrangler": "^3.72.0"
   }
 }
