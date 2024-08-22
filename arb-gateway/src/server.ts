@@ -39,8 +39,8 @@ const proofService = new ArbProofService({
   l2RollupAddress,
   cache: new InMemoryBlockCache(),
 });
-
 const gateway = new EVMGateway(proofService);
+
 const router = CcipReadRouter({
   port,
 });

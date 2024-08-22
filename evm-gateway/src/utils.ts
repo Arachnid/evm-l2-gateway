@@ -1,5 +1,5 @@
-import { type Request as CFWRequest } from '@cloudflare/workers-types';
-import { type PropsDecoder } from '@ensdomains/server-analytics';
+import type { Request as CFWRequest } from '@cloudflare/workers-types';
+import type { PropsDecoder } from '@ensdomains/server-analytics';
 import {
   encodeAbiParameters,
   parseAbiParameter,
@@ -10,7 +10,7 @@ import {
 } from 'viem';
 
 import type { AbiParametersToPrimitiveTypes } from 'abitype';
-import { type StateProof } from './EVMProofHelper.js';
+import type { StateProof } from './EVMProofHelper.js';
 
 export interface Router {
   handle: (request: CFWRequest) => Promise<Response>;
