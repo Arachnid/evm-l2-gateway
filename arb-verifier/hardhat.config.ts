@@ -1,8 +1,7 @@
-import '@nomicfoundation/hardhat-toolbox';
+import '@nomicfoundation/hardhat-toolbox-viem';
 import 'hardhat-deploy';
-import 'hardhat-deploy-ethers';
 import { HardhatUserConfig } from 'hardhat/config';
-import 'ethers';
+
 const DEPLOYER_PRIVATE_KEY =
   process.env.DEPLOYER_PRIVATE_KEY ||
   'ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
@@ -42,7 +41,7 @@ const config: HardhatUserConfig = {
       url: L1_PROVIDER_URL,
       accounts: [DEPLOYER_PRIVATE_KEY],
       deploy: ['deploy_l1/'],
-      chainId:11155111,
+      chainId: 11155111,
       companionNetworks: {
         l2: 'arbitrumSepolia',
       },
@@ -56,7 +55,7 @@ const config: HardhatUserConfig = {
       chainId: 421614,
       url: 'https://sepolia-rollup.arbitrum.io/rpc',
       accounts: [DEPLOYER_PRIVATE_KEY],
-      deploy: [ "deploy_l2/" ],
+      deploy: ['deploy_l2/'],
     },
   },
   etherscan: {
@@ -76,13 +75,13 @@ const config: HardhatUserConfig = {
         },
       },
       {
-        network: "arbitrumSepolia",
+        network: 'arbitrumSepolia',
         chainId: 421614,
         urls: {
-          apiURL: "https://api-sepolia.arbiscan.io/api",
-          browserURL: "https://api-sepolia.arbiscan.io"
-        }
-      }
+          apiURL: 'https://api-sepolia.arbiscan.io/api',
+          browserURL: 'https://api-sepolia.arbiscan.io',
+        },
+      },
     ],
   },
   namedAccounts: {

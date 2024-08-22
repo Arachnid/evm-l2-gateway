@@ -1,25 +1,10 @@
-import { toBeHex, type AddressLike, type JsonRpcProvider } from 'ethers';
-
-/**
- * Response of the eth_getProof RPC method.
- */
-interface EthGetProofResponse {
-  accountProof: string;
-  balance: string;
-  codeHash: string;
-  nonce: string;
-  storageHash: string;
-  storageProof: {
-    key: string;
-    value: string;
-    proof: string;
-  }[];
-}
+import { toHex, type Address, type Client, type Hex } from 'viem';
+import { getProof, getStorageAt } from 'viem/actions';
 
 export interface StateProof {
-  stateTrieWitness: string;
-  storageProofs: string[];
-  stateRoot: string;
+  stateTrieWitness: Hex[];
+  storageProofs: Hex[][];
+  stateRoot: Hex;
 }
 
 /**
@@ -28,10 +13,10 @@ export interface StateProof {
  *
  */
 export class EVMProofHelper {
-  private readonly provider: JsonRpcProvider;
+  private readonly client: Client;
 
-  constructor(provider: JsonRpcProvider) {
-    this.provider = provider;
+  constructor(client: Client) {
+    this.client = client;
   }
 
   /**
@@ -41,12 +26,20 @@ export class EVMProofHelper {
    * @param slot The slot to fetch.
    * @returns The value in `slot` of `address` at block `block`
    */
-  getStorageAt(
-    blockNo: number,
-    address: AddressLike,
-    slot: bigint
-  ): Promise<string> {
-    return this.provider.getStorage(address, slot, blockNo);
+  async getStorageAt({
+    blockNumber,
+    address,
+    slot,
+  }: {
+    blockNumber: number;
+    address: Address;
+    slot: bigint;
+  }): Promise<Hex> {
+    return getStorageAt(this.client, {
+      address,
+      blockNumber: BigInt(blockNumber),
+      slot: toHex(slot),
+    }).then((v) => v ?? '0x');
   }
 
   /**
@@ -57,20 +50,20 @@ export class EVMProofHelper {
    * @returns A proof of the given slots, encoded in a manner that this service's
    *   corresponding decoding library will understand.
    */
-  async getProofs(
-    blockNo: number,
-    address: AddressLike,
-    slots: bigint[]
-  ): Promise<StateProof> {
-    const args = [
+  async getProofs({
+    blockNumber,
+    address,
+    slots,
+  }: {
+    blockNumber: number;
+    address: Address;
+    slots: bigint[];
+  }): Promise<StateProof> {
+    const proofs = await getProof(this.client, {
       address,
-      slots.map((slot) => toBeHex(slot, 32)),
-      '0x' + blockNo.toString(16),
-    ];
-    const proofs: EthGetProofResponse = await this.provider.send(
-      'eth_getProof',
-      args
-    );
+      blockNumber: BigInt(blockNumber),
+      storageKeys: slots.map((s) => toHex(s, { size: 32 })),
+    });
     return {
       stateTrieWitness: proofs.accountProof,
       storageProofs: proofs.storageProof.map((proof) => proof.proof),

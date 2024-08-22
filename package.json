@@ -49,7 +49,7 @@
     "eslint-plugin-prettier": "^5.0.0",
     "husky": "^6.0.0",
     "prettier": "^3.0.3",
-    "typescript": "^5.2.2"
+    "typescript": "^5.5.4"
   },
   "dependencies": {
     "@ensdomains/ccip-read-cf-worker": "^0.0.3",

@@ -1,7 +1,8 @@
-import { Server } from '@chainlink/ccip-read-server';
 import { Command } from '@commander-js/extra-typings';
+import { CcipReadRouter } from '@ensdomains/ccip-read-router';
 import { EVMGateway } from '@ensdomains/evm-gateway';
-import { ethers } from 'ethers';
+import { createClient, http } from 'viem';
+
 import { L1ProofService } from './L1ProofService.js';
 
 const program = new Command()
@@ -10,18 +11,13 @@ const program = new Command()
 
 program.parse();
 
-const options = program.opts();
-const provider = new ethers.JsonRpcProvider(options.providerUrl);
-const gateway = new EVMGateway(new L1ProofService(provider));
-const server = new Server();
-gateway.add(server);
-const app = server.makeApp('/');
+const { port, providerUrl } = program.opts();
 
-const port = parseInt(options.port);
-if (String(port) !== options.port) throw new Error('Invalid port');
+const client = createClient({ transport: http(providerUrl) });
+const proofService = new L1ProofService(client);
+const gateway = new EVMGateway(proofService);
 
-(async () => {
-  app.listen(port, function () {
-    console.log(`Listening on ${port}`);
-  });
-})();
+const router = CcipReadRouter({ port });
+gateway.add(router);
+
+export default router;

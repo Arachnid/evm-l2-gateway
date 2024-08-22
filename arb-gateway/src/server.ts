@@ -1,7 +1,8 @@
-import { Server } from '@chainlink/ccip-read-server';
 import { Command } from '@commander-js/extra-typings';
+import { CcipReadRouter } from '@ensdomains/ccip-read-router';
 import { EVMGateway } from '@ensdomains/evm-gateway';
-import { JsonRpcProvider } from 'ethers';
+import { createClient, http, isAddress } from 'viem';
+
 import { ArbProofService } from './ArbProofService.js';
 import { InMemoryBlockCache } from './blockCache/InMemoryBlockCache.js';
 
@@ -25,28 +26,24 @@ const program = new Command()
 
 program.parse();
 
-(async () => {
-  const options = program.opts();
+const { l1ProviderUrl, l2ProviderUrl, l2RollupAddress, port } = program.opts();
+if (!isAddress(l2RollupAddress))
+  throw new Error('Invalid address format for L2 rollup');
 
-  const l1Provider = new JsonRpcProvider(options.l1ProviderUrl);
-  const l2Provider = new JsonRpcProvider(options.l2ProviderUrl);
+const l1Client = createClient({ transport: http(l1ProviderUrl) });
+const l2Client = createClient({ transport: http(l2ProviderUrl) });
 
-  const gateway = new EVMGateway(
-    new ArbProofService(
-      l1Provider,
-      l2Provider,
-      options.l2RollupAddress,
-      new InMemoryBlockCache()
-    )
-  );
-  const server = new Server();
-  gateway.add(server);
-  const app = server.makeApp('/');
+const proofService = new ArbProofService({
+  l1Client,
+  l2Client,
+  l2RollupAddress,
+  cache: new InMemoryBlockCache(),
+});
+const gateway = new EVMGateway(proofService);
 
-  const port = parseInt(options.port);
-  if (String(port) !== options.port) throw new Error('Invalid port');
+const router = CcipReadRouter({
+  port,
+});
+gateway.add(router);
 
-  app.listen(port, function () {
-    console.log(`Listening on ${port}`);
-  });
-})();
+export default router;

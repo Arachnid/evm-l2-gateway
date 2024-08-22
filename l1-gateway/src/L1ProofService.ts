@@ -1,21 +1,26 @@
 import {
-  AbiCoder,
-  encodeRlp as encodeRlp_,
-  type AddressLike,
-  type JsonRpcProvider,
-} from 'ethers';
-
-import {
   EVMProofHelper,
   convertIntoMerkleTrieProof,
   type IProofService,
 } from '@ensdomains/evm-gateway';
-import { Block, type JsonRpcBlock } from '@ethereumjs/block';
 
-type RlpObject = Uint8Array | Array<RlpObject>;
-const encodeRlp = encodeRlp_ as (object: RlpObject) => string;
+import {
+  encodeAbiParameters,
+  parseAbiParameters,
+  toRlp,
+  type Address,
+  type Client,
+  type Hex,
+} from 'viem';
+import { getBlock } from 'viem/actions';
 
 export type L1ProvableBlock = number;
+
+const toIdkHex = (val: bigint): Hex => {
+  if (val === 0n) return '0x';
+  const hexxed = val.toString(16);
+  return `0x${hexxed.length % 2 === 0 ? hexxed : `0${hexxed}`}`;
+};
 
 /**
  * The proofService class can be used to calculate proofs for a given target and slot on the Optimism Bedrock network.
@@ -23,21 +28,21 @@ export type L1ProvableBlock = number;
  *
  */
 export class L1ProofService implements IProofService<L1ProvableBlock> {
-  private readonly provider: JsonRpcProvider;
+  private readonly client: Client;
   private readonly helper: EVMProofHelper;
 
-  constructor(provider: JsonRpcProvider) {
-    this.provider = provider;
-    this.helper = new EVMProofHelper(provider);
+  constructor(client: Client) {
+    this.client = client;
+    this.helper = new EVMProofHelper(client);
   }
 
   /**
    * @dev Returns an object representing a block whose state can be proven on L1.
    */
-  async getProvableBlock(): Promise<number> {
-    const block = await this.provider.getBlock('latest');
+  async getProvableBlock(): Promise<L1ProvableBlock> {
+    const block = await getBlock(this.client, { blockTag: 'latest' });
     if (!block) throw new Error('No block found');
-    return block.number - 1;
+    return Number(block.number) - 1;
   }
 
   /**
@@ -47,12 +52,16 @@ export class L1ProofService implements IProofService<L1ProvableBlock> {
    * @param slot The slot to fetch.
    * @returns The value in `slot` of `address` at block `block`
    */
-  getStorageAt(
-    block: L1ProvableBlock,
-    address: AddressLike,
-    slot: bigint
-  ): Promise<string> {
-    return this.helper.getStorageAt(block, address, slot);
+  getStorageAt({
+    block,
+    address,
+    slot,
+  }: {
+    block: L1ProvableBlock;
+    address: Address;
+    slot: bigint;
+  }): Promise<Hex> {
+    return this.helper.getStorageAt({ blockNumber: block, address, slot });
   }
 
   /**
@@ -63,24 +72,65 @@ export class L1ProofService implements IProofService<L1ProvableBlock> {
    * @returns A proof of the given slots, encoded in a manner that this service's
    *   corresponding decoding library will understand.
    */
-  async getProofs(
-    blockNo: L1ProvableBlock,
-    address: AddressLike,
-    slots: bigint[]
-  ): Promise<string> {
-    const proof = await this.helper.getProofs(blockNo, address, slots);
-    const rpcBlock: JsonRpcBlock = await this.provider.send(
-      'eth_getBlockByNumber',
-      ['0x' + blockNo.toString(16), false]
-    );
-    const block = Block.fromRPC(rpcBlock);
-    const blockHeader = encodeRlp(block.header.raw());
-    return AbiCoder.defaultAbiCoder().encode(
+  async getProofs({
+    block,
+    address,
+    slots,
+  }: {
+    block: L1ProvableBlock;
+    address: Address;
+    slots: bigint[];
+  }): Promise<Hex> {
+    const proof = await this.helper.getProofs({
+      blockNumber: block,
+      address,
+      slots,
+    });
+    const comparisonBlock = await getBlock(this.client, {
+      blockNumber: BigInt(block),
+      includeTransactions: false,
+    });
+
+    if (!comparisonBlock) throw new Error('Block not found');
+
+    const headerArray = [
+      comparisonBlock.parentHash,
+      comparisonBlock.sha3Uncles,
+      comparisonBlock.miner,
+      comparisonBlock.stateRoot,
+      comparisonBlock.transactionsRoot,
+      comparisonBlock.receiptsRoot,
+      comparisonBlock.logsBloom!,
+      toIdkHex(comparisonBlock.difficulty),
+      toIdkHex(comparisonBlock.number!),
+      toIdkHex(comparisonBlock.gasLimit),
+      toIdkHex(comparisonBlock.gasUsed), // 10
+      toIdkHex(comparisonBlock.timestamp),
+      comparisonBlock.extraData,
+      comparisonBlock.mixHash,
+      comparisonBlock.nonce!,
+      toIdkHex(comparisonBlock.baseFeePerGas!), // 15
+      ...(comparisonBlock.withdrawalsRoot
+        ? [comparisonBlock.withdrawalsRoot]
+        : (['0x'] as const)), // anvil ???
+      ...(typeof comparisonBlock.blobGasUsed === 'bigint'
+        ? [
+            toIdkHex(comparisonBlock.blobGasUsed),
+            toIdkHex(comparisonBlock.excessBlobGas),
+          ]
+        : []),
+    ];
+
+    const blockHeader = toRlp(headerArray) as Hex;
+    return encodeAbiParameters(
+      parseAbiParameters([
+        '(uint256 blockNumber, bytes blockHeader)',
+        '(bytes stateTrieWitness, bytes[] storageProofs)',
+      ]),
       [
-        'tuple(uint256 blockNo, bytes blockHeader)',
-        'tuple(bytes stateTrieWitness, bytes[] storageProofs)',
-      ],
-      [{ blockNo, blockHeader }, convertIntoMerkleTrieProof(proof)]
+        { blockNumber: BigInt(block), blockHeader },
+        convertIntoMerkleTrieProof(proof),
+      ]
     );
   }
 }

@@ -1,191 +1,172 @@
-import { Server } from '@chainlink/ccip-read-server';
-import { makeArbGateway } from '@ensdomains/arb-gateway';
-import { HardhatEthersProvider } from '@nomicfoundation/hardhat-ethers/internal/hardhat-ethers-provider';
-import type { HardhatEthersHelpers } from '@nomicfoundation/hardhat-ethers/types';
 import { expect } from 'chai';
+import hre from 'hardhat';
 import {
-  AbiCoder,
+  ccipRequest,
   concat,
-  Contract,
-  FetchRequest,
-  Provider,
-  Signer,
-  ethers as ethersT
-} from 'ethers';
-import express from 'express';
-import hre, { ethers } from 'hardhat';
-import { EthereumProvider } from 'hardhat/types';
-import request from 'supertest';
+  ContractFunctionExecutionError,
+  ContractFunctionRevertedError,
+  createClient,
+  custom,
+  encodeAbiParameters,
+  getContract,
+  type Address,
+  type Hex,
+} from 'viem';
+import { estimateGas } from 'viem/actions';
 
-type ethersObj = typeof ethersT &
-  Omit<HardhatEthersHelpers, 'provider'> & {
-    provider: Omit<HardhatEthersProvider, '_hardhatProvider'> & {
-      _hardhatProvider: EthereumProvider;
-    };
+const getDeployment = async () => {
+  const clientWithoutCcipRead = createClient({
+    transport: await hre.viem
+      .getPublicClient()
+      .then((v) => custom(v, { retryCount: 0 })),
+    ccipRead: false,
+  });
+  const targetDeployment = await hre.deployments.get('TestL1');
+  const contract = await hre.viem.getContractAt(
+    'TestL1',
+    targetDeployment.address as Address
+  );
+  type Contract = typeof contract;
+  const ccipReadDisabledContract = getContract({
+    abi: contract.abi,
+    address: contract.address,
+    client: clientWithoutCcipRead,
+  });
+  const estimateCallbackGas = new Proxy(
+    ccipReadDisabledContract.read as unknown as {
+      [fn in keyof Contract['read']]: (
+        ...args: Parameters<Contract['read'][fn]>
+      ) => Promise<bigint>;
+    },
+    {
+      get(target, prop) {
+        return async (...args: never[]) => {
+          const result = await target[prop as keyof typeof target](
+            ...args
+          ).catch((e) => e);
+          if (!(result instanceof ContractFunctionExecutionError))
+            throw new Error('Expected error');
+
+          if (!(result.cause instanceof ContractFunctionRevertedError))
+            throw new Error('Expected error');
+
+          const revertData = result.cause.data;
+          // string name check good enough for now
+          if (revertData?.errorName !== 'OffchainLookup')
+            throw new Error('Expected error');
+
+          const [sender, urls, callData, callbackSelector, extraData] =
+            revertData.args as [Hex, string[], Hex, Hex, Hex];
+          const ccipResult = await ccipRequest({
+            data: callData,
+            sender,
+            urls,
+          });
+
+          const estimatedGas = await estimateGas(clientWithoutCcipRead, {
+            to: sender,
+            data: concat([
+              callbackSelector,
+              encodeAbiParameters(
+                [{ type: 'bytes' }, { type: 'bytes' }],
+                [ccipResult, extraData]
+              ),
+            ]),
+          });
+
+          console.log(`Gas estimate ${estimatedGas}`);
+
+          return estimatedGas;
+        };
+      },
+    }
+  );
+  return {
+    ...contract,
+    estimateCallbackGas,
   };
-
-declare module 'hardhat/types/runtime' {
-  const ethers: ethersObj;
-  interface HardhatRuntimeEnvironment {
-    ethers: ethersObj;
-  }
-}
-const estimateCCIPReadCallbackGas = async (provider, cb) => {
-  try{
-    await cb()
-  }catch(e){
-    const [sender, urls, data, callbackFunction, extraData ] = e.revert.args
-    const url = `http://localhost:8080/${sender}/${data}.json`
-    const responseData:any = await (await fetch(url)).json()
-    const encoder = new AbiCoder()
-    const encoded = encoder.encode([ "bytes", "bytes" ], [responseData.data, extraData]);
-    const newdata = concat([ callbackFunction, encoded ])
-    const result2 = await provider.estimateGas({
-      to: sender,
-      data:newdata
-    });
-    console.log(`Gas estimate ${result2}`)
-  }
-}
+};
 
 describe('ArbVerifier', () => {
-  let provider: Provider;
-  let signer: Signer;
-  let gateway: express.Application;
-  let target: Contract;
-
-  before(async () => {
-    // Hack to get a 'real' ethers provider from hardhat. The default `HardhatProvider`
-    // doesn't support CCIP-read.
-    provider = new ethers.BrowserProvider(hre.network.provider);
-    signer = await provider.getSigner(0);
-
-    //Rollup address according to sequencer config. Unfortunately, there is no endpoint to fetch it at runtime from the rollup.
-    //The address can be found at nitro-testnode-sequencer-1/config/deployment.json 
-    const rollupAddress = process.env.ROLLUP_ADDRESS;
-    // When testing against Goerli, replace with this address
-    // const rollupAddress = '0x45e5cAea8768F42B385A366D3551Ad1e0cbFAb17';
-    const chainId = hre.network.config.chainId
-    const gateway = await makeArbGateway(
-      (hre.network.config as any).url, 
-      (hre.config.networks[hre.network.companionNetworks.l2] as any).url,
-      rollupAddress,
-      chainId,
-    );
-    const server = new Server()
-    gateway.add(server)
-    const app = server.makeApp('/')
-
-
-    // Replace ethers' fetch function with one that calls the gateway directly.
-    const getUrl = FetchRequest.createGetUrlFunc();
-    ethers.FetchRequest.registerGetUrl(async (req: FetchRequest) => {
-      if (req.url != "test:") return getUrl(req);
-
-      const r = request(app).post('/');
-      if (req.hasBody()) {
-        r.set('Content-Type', 'application/json').send(
-          ethers.toUtf8String(req.body)
-        );
-      }
-      const response = await r;
-      return {
-        statusCode: response.statusCode,
-        statusMessage: response.ok ? 'OK' : response.statusCode.toString(),
-        body: ethers.toUtf8Bytes(JSON.stringify(response.body)),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      };
-    });
-
-    const targetDeployment = await hre.deployments.get('TestL1');
-    target = await ethers.getContractAt('TestL1', targetDeployment.address, signer);
-  })
-
   it('simple proofs for fixed values', async () => {
-    const result = await target.getLatest({ enableCcipRead: true });
-    expect(Number(result)).to.equal(42);
-    await estimateCCIPReadCallbackGas(provider, ()=>{
-      return target.getLatest({ enableCcipRead: false });
-    })
+    const target = await getDeployment();
+    const result = await target.read.getLatest();
+    expect(result).to.equal(42n);
+
+    await target.estimateCallbackGas.getLatest();
   });
 
   it('simple proofs for dynamic values', async () => {
-    const result = await target.getName({ enableCcipRead: true });
+    const target = await getDeployment();
+    const result = await target.read.getName();
     expect(result).to.equal('Satoshi');
-    await estimateCCIPReadCallbackGas(provider, ()=>{
-      return target.getName({ enableCcipRead: false });
-    })
+
+    await target.estimateCallbackGas.getName();
   });
 
   it('nested proofs for dynamic values', async () => {
-    const result = await target.getHighscorer(42, { enableCcipRead: true });
+    const target = await getDeployment();
+    const result = await target.read.getHighscorer([42n]);
     expect(result).to.equal('Hal Finney');
-    await estimateCCIPReadCallbackGas(provider, ()=>{
-      return target.getHighscorer(42, { enableCcipRead: false });
-    })
+
+    await target.estimateCallbackGas.getHighscorer([42n]);
   });
 
   it('nested proofs for long dynamic values', async () => {
-    const result = await target.getHighscorer(1, { enableCcipRead: true });
+    const target = await getDeployment();
+    const result = await target.read.getHighscorer([1n]);
     expect(result).to.equal(
       'Hubert Blaine Wolfeschlegelsteinhausenbergerdorff Sr.'
     );
-    await estimateCCIPReadCallbackGas(provider, ()=>{
-      return target.getHighscorer(1, { enableCcipRead: false });
-    })
+
+    await target.estimateCallbackGas.getHighscorer([1n]);
   });
 
   it('nested proofs with lookbehind', async () => {
-    const result = await target.getLatestHighscore({ enableCcipRead: true });
-    expect(Number(result)).to.equal(12345);
-    await estimateCCIPReadCallbackGas(provider, ()=>{
-      return target.getLatestHighscore({ enableCcipRead: false });
-    })
+    const target = await getDeployment();
+    const result = await target.read.getLatestHighscore();
+    expect(result).to.equal(12345n);
+
+    await target.estimateCallbackGas.getLatestHighscore();
   });
 
   it('nested proofs with lookbehind for dynamic values', async () => {
-    const result = await target.getLatestHighscorer({ enableCcipRead: true });
+    const target = await getDeployment();
+    const result = await target.read.getLatestHighscorer();
     expect(result).to.equal('Hal Finney');
-    await estimateCCIPReadCallbackGas(provider, ()=>{
-      return target.getLatestHighscorer({ enableCcipRead: false });
-    })
+
+    await target.estimateCallbackGas.getLatestHighscorer();
   });
 
   it('mappings with variable-length keys', async () => {
-    const result = await target.getNickname('Money Skeleton', {
-      enableCcipRead: true,
-    });
+    const target = await getDeployment();
+    const result = await target.read.getNickname(['Money Skeleton']);
     expect(result).to.equal('Vitalik Buterin');
-    await estimateCCIPReadCallbackGas(provider, ()=>{
-      return target.getNickname('Money Skeleton', {
-        enableCcipRead: false,
-      });
-    })
+
+    await target.estimateCallbackGas.getNickname(['Money Skeleton']);
   });
 
   it('nested proofs of mappings with variable-length keys', async () => {
-    const result = await target.getPrimaryNickname({ enableCcipRead: true });
+    const target = await getDeployment();
+    const result = await target.read.getPrimaryNickname();
     expect(result).to.equal('Hal Finney');
-    await estimateCCIPReadCallbackGas(provider, ()=>{
-      return target.getPrimaryNickname({ enableCcipRead: false });
-    })
+
+    await target.estimateCallbackGas.getPrimaryNickname();
   });
 
   it('treats uninitialized storage elements as zeroes', async () => {
-    const result = await target.getZero({ enableCcipRead: true });
-    expect(Number(result)).to.equal(0);
-    await estimateCCIPReadCallbackGas(provider, ()=>{
-      return target.getZero({ enableCcipRead: false });
-    })
+    const target = await getDeployment();
+    const result = await target.read.getZero();
+    expect(result).to.equal(0n);
+
+    await target.estimateCallbackGas.getZero();
   });
 
   it('treats uninitialized dynamic values as empty strings', async () => {
-    const result = await target.getNickname('Santa', { enableCcipRead: true });
-    expect(result).to.equal("");
-    await estimateCCIPReadCallbackGas(provider, ()=>{
-      return target.getNickname('Santa', { enableCcipRead: false });
-    })
-  })
+    const target = await getDeployment();
+    const result = await target.read.getNickname(['Santa']);
+    expect(result).to.equal('');
+
+    await target.estimateCallbackGas.getNickname(['Santa']);
+  });
 });
