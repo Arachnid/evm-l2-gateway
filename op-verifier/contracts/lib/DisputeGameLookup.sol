@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import 'src/dispute/interfaces/IFaultDisputeGame.sol';
+import './dispute/interfaces/IFaultDisputeGame.sol';
 import {IOptimismPortalOutputRoot, IDisputeGameFactory} from './IOptimismPortalOutputRoot.sol';
+import { GameStatus, Timestamp } from "./dispute/lib/Types.sol";
 
 interface IChallengingDisputeGame is IFaultDisputeGame {
     function claimData(

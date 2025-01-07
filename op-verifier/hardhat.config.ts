@@ -78,12 +78,12 @@ const config: HardhatUserConfig = {
   },
   etherscan: {
     apiKey: {
-        goerli: L1_ETHERSCAN_API_KEY,
-        sepolia: L1_ETHERSCAN_API_KEY,
-        optimismGoerli: L2_ETHERSCAN_API_KEY,
-        baseGoerli: L2_ETHERSCAN_API_KEY,
-        optimismSepolia: L2_ETHERSCAN_API_KEY,
-        baseSepolia: L2_ETHERSCAN_API_KEY,
+        goerli: L1_ETHERSCAN_API_KEY || '',
+        sepolia: L1_ETHERSCAN_API_KEY || '',
+        optimismGoerli: L2_ETHERSCAN_API_KEY || '',
+        baseGoerli: L2_ETHERSCAN_API_KEY || '',
+        optimismSepolia: L2_ETHERSCAN_API_KEY || '',
+        baseSepolia: L2_ETHERSCAN_API_KEY || '',
     },
     customChains: [
       {

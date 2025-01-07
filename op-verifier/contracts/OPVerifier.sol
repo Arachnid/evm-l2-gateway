@@ -5,8 +5,8 @@ import {IEVMVerifier} from '@ensdomains/evm-verifier/contracts/IEVMVerifier.sol'
 import {StateProof, EVMProofHelper} from '@ensdomains/evm-verifier/contracts/EVMProofHelper.sol';
 import {DisputeGameLookup, L2OutputOracleLookup, IOptimismPortalOutputRoot, OPWitnessProofType} from './lib/OPOutputLookup.sol';
 import {MerkleTrieProofHelper} from '@ensdomains/evm-verifier/contracts/MerkleTrieProofHelper.sol';
-import {Hashing} from 'src/libraries/Hashing.sol';
-import {Types} from 'src/libraries/Types.sol';
+import {Hashing} from '@eth-optimism/contracts-bedrock/src/libraries/Hashing.sol';
+import {Types} from '@eth-optimism/contracts-bedrock/src/libraries/Types.sol';
 
 struct OPWitnessData {
     OPWitnessProofType proofType;

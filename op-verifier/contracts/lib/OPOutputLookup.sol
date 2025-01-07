@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-import "src/dispute/interfaces/IFaultDisputeGame.sol";
+import "./dispute/interfaces/IFaultDisputeGame.sol";
 import "./DisputeGameLookup.sol";
 import "./L2OutputOracleLookup.sol";
 import "./IOptimismPortalOutputRoot.sol";
