@@ -17,8 +17,8 @@ const program = new Command()
     'http://localhost:9545/'
   )
   .option(
-    '-o --l2-output-oracle <address>',
-    'address for L2 output oracle on the L1',
+    '-o --l2-optimism-portal <address>',
+    'address for OptimismPortalProxy on the L1',
     ''
   )
   .option('-d, --delay <number>', 'number of blocks delay to use', '5');
@@ -35,7 +35,7 @@ program.parse();
     new OPProofService(
       l1Provider,
       l2Provider,
-      options.l2OutputOracle,
+      options.l2OptimismPortal,
       Number(options.delay)
     )
   );

@@ -1,44 +1,98 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.15;
 
-import { IEVMVerifier } from "@ensdomains/evm-verifier/contracts/IEVMVerifier.sol";
-import { RLPReader } from "@eth-optimism/contracts-bedrock/src/libraries/rlp/RLPReader.sol";
-import { StateProof, EVMProofHelper } from "@ensdomains/evm-verifier/contracts/EVMProofHelper.sol";
-import { Types } from "@eth-optimism/contracts-bedrock/src/libraries/Types.sol";
-import { Hashing } from "@eth-optimism/contracts-bedrock/src/libraries/Hashing.sol";
+import {IEVMVerifier} from '@ensdomains/evm-verifier/contracts/IEVMVerifier.sol';
+import {StateProof, EVMProofHelper} from '@ensdomains/evm-verifier/contracts/EVMProofHelper.sol';
+import {DisputeGameLookup, L2OutputOracleLookup, IOptimismPortalOutputRoot, OPWitnessProofType} from './lib/OPOutputLookup.sol';
 import {MerkleTrieProofHelper} from '@ensdomains/evm-verifier/contracts/MerkleTrieProofHelper.sol';
+import {Hashing} from '@eth-optimism/contracts-bedrock/src/libraries/Hashing.sol';
+import {Types} from '@eth-optimism/contracts-bedrock/src/libraries/Types.sol';
 
 struct OPWitnessData {
-    uint256 l2OutputIndex;
+    OPWitnessProofType proofType;
+    uint256 index;
     Types.OutputRootProof outputRootProof;
 }
 
-interface IL2OutputOracle {
-    function getL2Output(uint256 _l2OutputIndex) external view returns (Types.OutputProposal memory);
-}
-
 contract OPVerifier is IEVMVerifier {
-    error OutputRootMismatch(uint256 l2OutputIndex, bytes32 expected, bytes32 actual);
+    error OutputRootMismatch(
+        OPWitnessProofType proofType,
+        uint256 index,
+        bytes32 expected,
+        bytes32 actual
+    );
 
-    IL2OutputOracle public opOracle;
+    IOptimismPortalOutputRoot public immutable optimismPortal;
+    uint256 public immutable minAge;
+    uint256 public immutable maxAge;
+
     string[] _gatewayURLs;
 
-    constructor(string[] memory urls, address outputOracle) {
+    constructor(
+        string[] memory urls,
+        address optimismPortalAddress,
+        uint256 minimumAge,
+        uint256 maximumAge
+    ) {
         _gatewayURLs = urls;
-        opOracle = IL2OutputOracle(outputOracle);
+        optimismPortal = IOptimismPortalOutputRoot(optimismPortalAddress);
+        minAge = minimumAge;
+        maxAge = maximumAge;
     }
 
-    function gatewayURLs() external view returns(string[] memory) {
+    function gatewayURLs() external view returns (string[] memory) {
         return _gatewayURLs;
     }
 
-    function getStorageValues(address target, bytes32[] memory commands, bytes[] memory constants, bytes memory proof) external view returns(bytes[] memory values) {
-        (OPWitnessData memory opData, StateProof memory stateProof) = abi.decode(proof, (OPWitnessData, StateProof));
-        Types.OutputProposal memory l2out = opOracle.getL2Output(opData.l2OutputIndex);
-        bytes32 expectedRoot = Hashing.hashOutputRootProof(opData.outputRootProof);
-        if(l2out.outputRoot != expectedRoot) {
-            revert OutputRootMismatch(opData.l2OutputIndex, expectedRoot, l2out.outputRoot);
+    function getL2OracleOutput(uint256 index) internal view returns (bytes32) {
+        return
+            L2OutputOracleLookup
+                .getL2Output(optimismPortal, index, minAge, maxAge)
+                .outputRoot;
+    }
+
+    function getDisputeGameOutput(
+        uint256 index
+    ) internal view returns (bytes32) {
+        (bytes32 outputRoot, , , ) = DisputeGameLookup.getRespectedDisputeGame(
+            optimismPortal,
+            index,
+            minAge,
+            maxAge
+        );
+
+        return outputRoot;
+    }
+
+    function getStorageValues(
+        address target,
+        bytes32[] memory commands,
+        bytes[] memory constants,
+        bytes memory proof
+    ) external view returns (bytes[] memory values) {
+        (OPWitnessData memory opData, StateProof memory stateProof) = abi
+            .decode(proof, (OPWitnessData, StateProof));
+        bytes32 expectedRoot = Hashing.hashOutputRootProof(
+            opData.outputRootProof
+        );
+
+        bytes32 outputRoot;
+
+        if (opData.proofType == OPWitnessProofType.DisputeGame) {
+            outputRoot = getDisputeGameOutput(opData.index);
+        } else if (opData.proofType == OPWitnessProofType.L2OutputOracle) {
+            outputRoot = getL2OracleOutput(opData.index);
         }
+
+        if (outputRoot != expectedRoot) {
+            revert OutputRootMismatch(
+                opData.proofType,
+                opData.index,
+                expectedRoot,
+                outputRoot
+            );
+        }
+
         bytes32 storageRoot = MerkleTrieProofHelper.getStorageRoot(opData.outputRootProof.stateRoot, target, stateProof.stateTrieWitness);
         return EVMProofHelper.getStorageValues(target, MerkleTrieProofHelper.getTrieProof, commands, constants, storageRoot, stateProof.storageProofs);
     }

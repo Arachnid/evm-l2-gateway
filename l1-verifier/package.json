@@ -45,7 +45,7 @@
     "typescript": "^5.2.2"
   },
   "dependencies": {
-    "@ensdomains/evm-verifier": "0.1.0-beta.4",
+    "@ensdomains/evm-verifier": "workspace:*",
     "@eth-optimism/contracts": "^0.6.0",
     "@eth-optimism/contracts-bedrock": "^0.16.2"
   }

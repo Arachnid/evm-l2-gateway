@@ -37,7 +37,7 @@
     "typescript": "^5.2.2"
   },
   "dependencies": {
-    "@ensdomains/evm-verifier": "0.1.0-beta.4",
+    "@ensdomains/evm-verifier": "workspace:*",
     "dotenv": "^16.3.1"
   }
 }

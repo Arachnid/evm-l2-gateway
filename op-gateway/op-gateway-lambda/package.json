@@ -1,0 +1,37 @@
+{
+  "name": "op-gateway-lambda",
+  "version": "0.1.0",
+  "bin": {
+    "op-gateway-lambda": "bin/op-gateway-lambda.js"
+  },
+  "scripts": {
+    "build:cjs": "tsc --module commonjs --outDir ./_cjs --removeComments --verbatimModuleSyntax false && echo > ./_cjs/package.json '{\"type\":\"commonjs\"}'",
+    "build:esm": "tsc --module es2022 --outDir ./_esm && echo > ./_esm/package.json '{\"type\":\"module\",\"sideEffects\":false}'",
+    "build:types": "tsc --module esnext --declarationDir ./_types --emitDeclarationOnly --declaration --declarationMap",
+    "build": "echo 'building op-gateway-lambda...' && bun run clean && bun run build:cjs && bun run build:esm && bun run build:types",
+    "prepublishOnly": "bun run build",
+    "lint": "eslint . --ext .ts",
+    "prepare": "bun run build",
+    "clean": "rm -fr _cjs _esm _types",
+    "watch": "tsc -w",
+    "test": "jest",
+    "cdk": "cdk"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.146",
+    "@types/debug": "^4.1.12",
+    "@types/jest": "^29.5.14",
+    "@types/node": "22.7.9",
+    "aws-cdk": "2.171.1",
+    "esbuild": "0.24.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.6.3"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.171.1",
+    "constructs": "^10.0.0",
+    "generic-rest-api-router": "^1.2.0"
+  }
+}

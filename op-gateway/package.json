@@ -59,7 +59,7 @@
     "@chainlink/ccip-read-server": "^0.2.1",
     "@cloudflare/workers-types": "^4.20240423.0",
     "@commander-js/extra-typings": "^11.0.0",
-    "@ensdomains/evm-gateway": "0.1.0-beta.4",
+    "@ensdomains/evm-gateway": "workspace:*",
     "@ensdomains/server-analytics": "0.0.1-alpha.5",
     "@ethereumjs/block": "^5.0.0",
     "@nomicfoundation/ethereumjs-block": "^5.0.2",

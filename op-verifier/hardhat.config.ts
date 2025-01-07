@@ -9,7 +9,19 @@ const L1_ETHERSCAN_API_KEY = process.env.L1_ETHERSCAN_API_KEY;
 const L2_ETHERSCAN_API_KEY = process.env.L2_ETHERSCAN_API_KEY;
 
 const config: HardhatUserConfig = {
-  solidity: '0.8.19',
+  solidity: {
+    compilers: [
+      {
+        version: '0.8.26',
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200
+          }
+        }
+      },
+    ]
+  },
   networks: {
     opDevnetL1: {
       url: "http://localhost:8545/",
@@ -66,12 +78,12 @@ const config: HardhatUserConfig = {
   },
   etherscan: {
     apiKey: {
-        goerli: L1_ETHERSCAN_API_KEY,
-        sepolia: L1_ETHERSCAN_API_KEY,
-        optimismGoerli: L2_ETHERSCAN_API_KEY,
-        baseGoerli: L2_ETHERSCAN_API_KEY,
-        optimismSepolia: L2_ETHERSCAN_API_KEY,
-        baseSepolia: L2_ETHERSCAN_API_KEY,
+        goerli: L1_ETHERSCAN_API_KEY || '',
+        sepolia: L1_ETHERSCAN_API_KEY || '',
+        optimismGoerli: L2_ETHERSCAN_API_KEY || '',
+        baseGoerli: L2_ETHERSCAN_API_KEY || '',
+        optimismSepolia: L2_ETHERSCAN_API_KEY || '',
+        baseSepolia: L2_ETHERSCAN_API_KEY || '',
     },
     customChains: [
       {

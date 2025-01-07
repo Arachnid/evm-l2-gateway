@@ -6,7 +6,7 @@ import { Tracker } from '@ensdomains/server-analytics';
 interface Env {
   L1_PROVIDER_URL: string;
   L2_PROVIDER_URL: string;
-  L2_OUTPUT_ORACLE: string;
+  L2_OPTIMISM_PORTAL: string;
   DELAY: number;
   GATEWAY_DOMAIN: string;
   ENDPOINT_URL: string;
@@ -19,7 +19,7 @@ async function fetch(request: CFWRequest, env: Env) {
   const {
     L1_PROVIDER_URL,
     L2_PROVIDER_URL,
-    L2_OUTPUT_ORACLE,
+    L2_OPTIMISM_PORTAL,
     DELAY,
     GATEWAY_DOMAIN,
     ENDPOINT_URL,
@@ -44,7 +44,7 @@ async function fetch(request: CFWRequest, env: Env) {
       new OPProofService(
         l1Provider,
         l2Provider,
-        L2_OUTPUT_ORACLE,
+        L2_OPTIMISM_PORTAL,
         Number(DELAY)
       )
     );
